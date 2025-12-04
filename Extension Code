@@ -1,0 +1,1042 @@
+// ==UserScript==
+// @name         抖音信息提取器（自动获取优化版 v10.1）
+// @namespace    https://github.com/kevencs/Douyin-User-Info-Extractor
+// @version      10.1
+// @description  智能识别抖音主页类型，自动提取并展示博主名字、SecUID、UID、SecUserID与Cookie信息，并提供一键复制功能
+// @author       kevencs
+// @license      MIT
+// @homepageURL  https://github.com/kevencs
+// @supportURL   https://github.com/kevencs
+// @match        *://*.douyin.com/*
+// @match        *://douyin.com/*
+// @grant        GM_setClipboard
+// @grant        GM_notification
+// @grant        GM_addStyle
+// @run-at       document-start
+// ==/UserScript==
+
+/*
+本插件有部分灵感与功能来源于抖小云作者的优秀程序，在此表示诚挚感谢。
+*/
+
+(function() {
+    'use strict';
+
+    // 配置信息
+    const CONFIG = {
+        themes: {
+            others: {
+                primary: '#FF2D55',
+                secondary: '#FF6B9D',
+                accent: '#FF9500',
+                background: 'linear-gradient(135deg, #fff5f7 0%, #ffffff 100%)',
+                cardBg: 'rgba(255, 255, 255, 0.95)',
+                textPrimary: '#2c3e50',
+                textSecondary: '#7f8c8d'
+            },
+            self: {
+                primary: '#8A2BE2',
+                secondary: '#9B59B6',
+                accent: '#3498DB',
+                background: 'linear-gradient(135deg, #f8f5ff 0%, #ffffff 100%)',
+                cardBg: 'rgba(255, 255, 255, 0.95)',
+                textPrimary: '#2c3e50',
+                textSecondary: '#7f8c8d'
+            }
+        }
+    };
+
+    // 新增：标记是否已尝试自动点击
+    let autoClickAttempted = false;
+
+    // 用户数据存储
+    let userData = {
+        nickname: '',
+        uid: '',
+        secUid: '',
+        isOwnPage: null,
+        lastUpdated: '',
+        cookies: '',
+        hasAutoTriggered: false
+    };
+
+    // 添加全局样式
+    GM_addStyle(`
+        :root {
+            --primary-color: #FF2D55;
+            --secondary-color: #FF6B9D;
+            --accent-color: #FF9500;
+            --background-color: linear-gradient(135deg, #fff5f7 0%, #ffffff 100%);
+            --card-bg-color: rgba(255, 255, 255, 0.95);
+            --text-primary-color: #2c3e50;
+            --text-secondary-color: #7f8c8d;
+        }
+
+        /* 悬浮按钮 */
+        #dy-extractor-trigger {
+            position: fixed !important;
+            bottom: 25px !important;
+            right: 20px !important;
+            width: 52px !important;
+            height: 52px !important;
+            border-radius: 26px !important;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)) !important;
+            color: white !important;
+            border: none !important;
+            font-size: 24px !important;
+            cursor: pointer !important;
+            z-index: 2147483647 !important;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.15) !important;
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            opacity: 0.15 !important;
+            backdrop-filter: blur(8px) !important;
+            border: 2px solid rgba(255,255,255,0.7) !important;
+        }
+
+        #dy-extractor-trigger:hover {
+            opacity: 1 !important;
+            transform: translateY(-5px) scale(1.08) rotate(5deg) !important;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.2), 0 0 0 3px rgba(255,255,255,0.3) !important;
+        }
+
+        /* 主面板 */
+        #dy-extractor-panel {
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) scale(0.95) !important;
+            width: 420px !important;
+            max-height: 75vh !important;
+            background: var(--background-color) !important;
+            border-radius: 22px !important;
+            box-shadow: 0 25px 70px rgba(0,0,0,0.18) !important;
+            z-index: 2147483646 !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+            overflow: hidden !important;
+            display: none !important;
+            opacity: 0 !important;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) !important;
+            border: 1px solid rgba(255,255,255,0.4) !important;
+        }
+
+        #dy-extractor-panel.show {
+            transform: translate(-50%, -50%) scale(1) !important;
+            opacity: 1 !important;
+            display: block !important;
+        }
+
+        /* 面板遮罩 */
+        #dy-extractor-overlay {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            background: rgba(0,0,0,0.35) !important;
+            backdrop-filter: blur(3px) !important;
+            z-index: 2147483645 !important;
+            display: none !important;
+            opacity: 0 !important;
+            transition: opacity 0.3s ease !important;
+        }
+
+        #dy-extractor-overlay.show {
+            display: block !important;
+            opacity: 1 !important;
+        }
+
+        /* 面板头部 */
+        .dy-extractor-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)) !important;
+            color: white !important;
+            padding: 26px 28px !important;
+            position: relative !important;
+        }
+
+        .dy-extractor-title {
+            font-size: 20px !important;
+            font-weight: 700 !important;
+            margin: 0 0 10px 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 14px !important;
+        }
+
+        .dy-extractor-subtitle {
+            font-size: 13px !important;
+            opacity: 0.9 !important;
+            margin: 0 !important;
+            font-weight: 400 !important;
+        }
+
+        .dy-page-type-badge {
+            background: rgba(255,255,255,0.22) !important;
+            padding: 5px 14px !important;
+            border-radius: 20px !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255,255,255,0.35) !important;
+        }
+
+        /* 关闭按钮 */
+        .dy-extractor-close {
+            position: absolute !important;
+            top: 22px !important;
+            right: 22px !important;
+            width: 30px !important;
+            height: 30px !important;
+            border-radius: 50% !important;
+            background: rgba(255,255,255,0.22) !important;
+            border: none !important;
+            color: white !important;
+            font-size: 18px !important;
+            cursor: pointer !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            transition: all 0.3s ease !important;
+            backdrop-filter: blur(8px) !important;
+        }
+
+        .dy-extractor-close:hover {
+            background: rgba(255,255,255,0.35) !important;
+            transform: rotate(90deg) scale(1.1) !important;
+        }
+
+        /* 内容区域 */
+        .dy-extractor-content {
+            max-height: calc(75vh - 160px) !important;
+            overflow-y: auto !important;
+            padding: 24px !important;
+        }
+
+        .dy-extractor-content::-webkit-scrollbar {
+            width: 5px !important;
+        }
+
+        .dy-extractor-content::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.04) !important;
+            border-radius: 10px !important;
+        }
+
+        .dy-extractor-content::-webkit-scrollbar-thumb {
+            background: var(--primary-color) !important;
+            border-radius: 10px !important;
+            opacity: 0.5 !important;
+        }
+
+        /* 信息卡片 */
+        .dy-info-card {
+            background: var(--card-bg-color) !important;
+            border-radius: 18px !important;
+            padding: 22px !important;
+            margin-bottom: 18px !important;
+            border: 1px solid rgba(0,0,0,0.06) !important;
+            transition: all 0.35s ease !important;
+            position: relative !important;
+            overflow: hidden !important;
+            backdrop-filter: blur(10px) !important;
+        }
+
+        .dy-info-card:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.1) !important;
+        }
+
+        .dy-info-card::before {
+            content: '' !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 5px !important;
+            height: 100% !important;
+            background: linear-gradient(to bottom, var(--primary-color), var(--secondary-color)) !important;
+        }
+
+        .dy-info-label {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            color: var(--text-secondary-color) !important;
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            margin-bottom: 12px !important;
+            text-transform: uppercase !important;
+        }
+
+        .dy-info-label-icon {
+            font-size: 16px !important;
+        }
+
+        .dy-info-value-wrapper {
+            display: flex !important;
+            gap: 14px !important;
+            align-items: flex-start !important;
+        }
+
+        .dy-info-value {
+            flex: 1 !important;
+            font-family: 'SF Mono', Monaco, Consolas, monospace !important;
+            font-size: 14px !important;
+            color: var(--text-primary-color) !important;
+            word-break: break-all !important;
+            padding: 14px !important;
+            background: rgba(255,255,255,0.85) !important;
+            border-radius: 14px !important;
+            border: 1px solid rgba(0,0,0,0.08) !important;
+            line-height: 1.5 !important;
+            max-height: 140px !important;
+            overflow-y: auto !important;
+        }
+
+        /* 复制按钮 */
+        .dy-copy-btn {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 14px !important;
+            padding: 12px 20px !important;
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            cursor: pointer !important;
+            transition: all 0.3s !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            min-width: 100px !important;
+            justify-content: center !important;
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
+        }
+
+        .dy-copy-btn:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.18) !important;
+        }
+
+        .dy-copy-btn.copied {
+            background: linear-gradient(135deg, #10B981, #34D399) !important;
+        }
+
+        /* 一键复制所有按钮 */
+        .dy-copy-all-btn {
+            background: linear-gradient(135deg, var(--accent-color), #FF5722) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 14px !important;
+            padding: 14px 24px !important;
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            cursor: pointer !important;
+            transition: all 0.3s !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 10px !important;
+            width: 100% !important;
+            margin-top: 10px !important;
+            margin-bottom: 5px !important;
+        }
+
+        .dy-copy-all-btn:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 22px rgba(255, 149, 0, 0.3) !important;
+        }
+
+        .dy-copy-all-btn.copied {
+            background: linear-gradient(135deg, #10B981, #34D399) !important;
+        }
+
+        /* 提示信息样式 */
+        .dy-help-tip {
+            background: linear-gradient(135deg, #FFF3CD, #FFEAA7) !important;
+            border: 1px solid #FFD54F !important;
+            border-radius: 14px !important;
+            padding: 16px !important;
+            margin-top: 12px !important;
+            font-size: 13px !important;
+            color: #856404 !important;
+            line-height: 1.5 !important;
+        }
+
+        .dy-help-tip strong {
+            color: #D35400 !important;
+        }
+
+        .dy-help-tip ol {
+            margin: 8px 0 8px 20px !important;
+            padding-left: 0 !important;
+        }
+
+        .dy-help-tip li {
+            margin-bottom: 6px !important;
+        }
+
+        /* 空状态 */
+        .dy-empty-state {
+            text-align: center !important;
+            padding: 50px 24px !important;
+            color: var(--text-secondary-color) !important;
+        }
+
+        .dy-empty-state-icon {
+            font-size: 60px !important;
+            margin-bottom: 18px !important;
+            opacity: 0.3 !important;
+        }
+
+        /* 状态栏 */
+        .dy-status-bar {
+            background: linear-gradient(to right, rgba(0,0,0,0.02) 0%, transparent 100%) !important;
+            padding: 16px 28px !important;
+            border-top: 1px solid rgba(0,0,0,0.06) !important;
+            font-size: 11px !important;
+            color: var(--text-secondary-color) !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+        }
+
+        @media (max-width: 768px) {
+            #dy-extractor-panel {
+                width: 92vw !important;
+                max-height: 85vh !important;
+            }
+        }
+    `);
+
+    // --- 工具函数 ---
+    function cleanNickname(rawName) {
+        if (!rawName) return '';
+        return rawName
+            .replace(/[的\-_\s]*(抖音|douyin|Dy|DY|TikTok)[\s\-_]*$/i, '')
+            .replace(/^[\s\-_\|]+|[\s\-_\|]+$/g, '')
+            .trim();
+    }
+
+    function applyTheme() {
+        const theme = userData.isOwnPage ? CONFIG.themes.self : CONFIG.themes.others;
+        document.documentElement.style.setProperty('--primary-color', theme.primary);
+        document.documentElement.style.setProperty('--secondary-color', theme.secondary);
+        document.documentElement.style.setProperty('--accent-color', theme.accent);
+        document.documentElement.style.setProperty('--background-color', theme.background);
+        document.documentElement.style.setProperty('--card-bg-color', theme.cardBg);
+        document.documentElement.style.setProperty('--text-primary-color', theme.textPrimary);
+        document.documentElement.style.setProperty('--text-secondary-color', theme.textSecondary);
+    }
+
+    // --- 核心修复：页面类型检测 ---
+    function detectPageType() {
+        const url = window.location.href;
+        const title = document.title.toLowerCase();
+
+        // 精确判断自己页面
+        const isSelfPage =
+            url.includes('/user/self') ||
+            url.includes('showTab=post') ||
+            title.includes('我的主页') ||
+            title.includes('个人主页');
+
+        // 判断他人页面
+        const isOthersPage = url.includes('/user/') && !url.includes('/user/self');
+
+        // 设置页面类型
+        if (isSelfPage) {
+            userData.isOwnPage = true;
+            console.log('[提取器] 检测到: 自己页面');
+        } else if (isOthersPage) {
+            userData.isOwnPage = false;
+            console.log('[提取器] 检测到: 他人页面');
+        } else {
+            // 默认根据数据判断
+            userData.isOwnPage = userData.secUid && userData.secUid.length > 20;
+        }
+
+        return userData.isOwnPage;
+    }
+
+    // --- 新增：增强的自动触发函数（模拟点击） ---
+    function enhancedAutoTrigger() {
+        if (autoClickAttempted || userData.secUid) {
+            console.log('[提取器] 已尝试过或已有数据，跳过自动触发');
+            return;
+        }
+        console.log('[提取器] 开始增强版自动获取...');
+        autoClickAttempted = true;
+
+        // 策略：优先寻找并点击"关注列表"，其次是"关注"按钮
+        const selectors = [
+            '[data-e2e="user-follow-list"]', // 关注列表按钮
+            '[data-e2e="user-follow"]',      // 关注按钮
+            '.dy-account-follow',            // 关注按钮的类
+            'button:contains("关注")',        // 包含"关注"文字的按钮
+            'div:contains("关注列表")'        // 包含"关注列表"文字的div
+        ];
+
+        let found = false;
+        for (let selector of selectors) {
+            const elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+                console.log(`[提取器] 找到元素 ${selector}，尝试触发`);
+                elements[0].click();
+                found = true;
+                // 点击后短暂延迟，给网络请求留出时间
+                setTimeout(() => {
+                    console.log('[提取器] 自动触发点击完成');
+                }, 800);
+                break;
+            }
+        }
+
+        if (!found) {
+            console.log('[提取器] 未找到合适的触发元素，将在面板显示手动指引');
+        }
+    }
+
+    // --- 核心修复：网络请求监听 ---
+    function setupNetworkListener() {
+        const originalOpen = XMLHttpRequest.prototype.open;
+        const originalSend = XMLHttpRequest.prototype.send;
+        const originalFetch = window.fetch;
+
+        XMLHttpRequest.prototype.open = function(method, url) {
+            this._requestUrl = url;
+            this._requestMethod = method;
+            return originalOpen.apply(this, arguments);
+        };
+
+        XMLHttpRequest.prototype.send = function(body) {
+            const requestUrl = this._requestUrl;
+            if (!requestUrl) return originalSend.apply(this, arguments);
+
+            // 1. 监听他人作品列表请求 - 获取博主UID (author_user_id)
+            if (requestUrl.includes('/web/aweme/post')) {
+                const originalOnReadyStateChange = this.onreadystatechange;
+                this.onreadystatechange = function() {
+                    if (this.readyState === 4 && this.status === 200) {
+                        try {
+                            const response = JSON.parse(this.responseText);
+                            if (response && response.aweme_list && response.aweme_list.length > 0) {
+                                const awemeItem = response.aweme_list[0];
+
+                                // 只在他人页面时更新博主信息
+                                if (!userData.isOwnPage) {
+                                    // 关键修复：从author_user_id字段获取博主UID
+                                    if (awemeItem.author_user_id) {
+                                        userData.uid = awemeItem.author_user_id.toString();
+                                        console.log('[提取器] 提取到博主UID (author_user_id):', userData.uid);
+                                    }
+
+                                    // 从author对象获取其他信息
+                                    if (awemeItem.author) {
+                                        userData.nickname = cleanNickname(awemeItem.author.nickname || '');
+                                        userData.secUid = awemeItem.author.sec_uid || awemeItem.author.sec_user_id || '';
+                                    }
+
+                                    userData.lastUpdated = new Date().toLocaleTimeString();
+                                    updateDisplay();
+                                }
+                            }
+                        } catch (e) {
+                            console.error('[提取器] 解析作品列表失败:', e);
+                        }
+                    }
+                    if (originalOnReadyStateChange) {
+                        return originalOnReadyStateChange.apply(this, arguments);
+                    }
+                };
+            }
+
+            // 2. 监听关注列表请求 - 获取自己的sec_user_id（强化响应解析）
+            if (requestUrl.includes('/web/user/following/list') || requestUrl.includes('/aweme/v1/web/user/following/list')) {
+                console.log('[提取器] 检测到关注列表请求:', requestUrl);
+
+                // 从URL提取sec_user_id
+                try {
+                    const urlObj = new URL(requestUrl, window.location.origin);
+                    const secUidFromUrl = urlObj.searchParams.get('sec_user_id');
+                    if (secUidFromUrl && secUidFromUrl.length > 10) {
+                        userData.secUid = secUidFromUrl;
+                        userData.isOwnPage = true;
+                        console.log('[提取器] 从URL参数提取到SecUserID:', userData.secUid);
+                    }
+                } catch (e) { console.warn('[提取器] URL解析失败:', e); }
+
+                // 新增关键逻辑：监听响应，从JSON数据中提取
+                const originalOnReadyStateChange = this.onreadystatechange;
+                this.onreadystatechange = function() {
+                    if (this.readyState === 4 && this.status === 200) {
+                        try {
+                            const response = JSON.parse(this.responseText);
+                            // 尝试从响应数据的常见路径中查找 sec_user_id
+                            let extractedSecUid = '';
+                            if (response?.data?.user?.sec_uid) {
+                                extractedSecUid = response.data.user.sec_uid;
+                            } else if (response?.followings && response.followings[0]?.sec_uid) {
+                                extractedSecUid = response.followings[0].sec_uid;
+                            } else if (response?.sec_user_id) {
+                                extractedSecUid = response.sec_user_id;
+                            }
+
+                            if (extractedSecUid && extractedSecUid.length > 10) {
+                                userData.secUid = extractedSecUid;
+                                userData.isOwnPage = true;
+                                userData.lastUpdated = new Date().toLocaleTimeString() + ' (自动获取)';
+                                console.log('[提取器] 从响应JSON提取到SecUserID:', userData.secUid);
+                                updateDisplay(); // 立即更新面板显示
+                                // 发送成功通知
+                                if (typeof GM_notification !== 'undefined') {
+                                    GM_notification({
+                                        text: `SecUserID 获取成功！`,
+                                        title: '抖音信息提取器',
+                                        timeout: 3000
+                                    });
+                                }
+                            }
+                        } catch (parseError) {
+                            console.warn('[提取器] 解析关注列表响应失败:', parseError);
+                        }
+                    }
+                    if (originalOnReadyStateChange) {
+                        return originalOnReadyStateChange.apply(this, arguments);
+                    }
+                };
+            }
+
+            return originalSend.apply(this, arguments);
+        };
+
+        // 监听Fetch请求
+        window.fetch = function(input, init) {
+            const requestUrl = typeof input === 'string' ? input : input.url;
+            if (!requestUrl) return originalFetch.apply(this, arguments);
+
+            // 监听关注列表请求
+            if (requestUrl.includes('/web/user/following/list') || requestUrl.includes('/aweme/v1/web/user/following/list')) {
+                console.log('[提取器] Fetch检测到关注列表请求');
+
+                try {
+                    const urlObj = new URL(requestUrl, window.location.origin);
+                    const secUidFromUrl = urlObj.searchParams.get('sec_user_id');
+
+                    if (secUidFromUrl) {
+                        userData.secUid = secUidFromUrl;
+                        userData.isOwnPage = true;
+                        userData.lastUpdated = new Date().toLocaleTimeString();
+                        console.log('[提取器] Fetch提取到SecUserID:', userData.secUid);
+                        updateDisplay();
+                    }
+                } catch (e) {
+                    console.error('[提取器] Fetch URL解析失败:', e);
+                }
+            }
+
+            return originalFetch.apply(this, arguments);
+        };
+    }
+
+    // --- 界面创建 ---
+    function createTriggerButton() {
+        const existingBtn = document.getElementById('dy-extractor-trigger');
+        if (existingBtn) existingBtn.remove();
+
+        const btn = document.createElement('button');
+        btn.id = 'dy-extractor-trigger';
+        btn.innerHTML = userData.isOwnPage ? '👤' : '📊';
+        btn.title = userData.isOwnPage ? '我的信息' : '博主信息';
+
+        document.body.appendChild(btn);
+        btn.addEventListener('click', showPanel);
+        return btn;
+    }
+
+    function createOverlay() {
+        const overlay = document.createElement('div');
+        overlay.id = 'dy-extractor-overlay';
+        overlay.addEventListener('click', hidePanel);
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+
+    function createPanel() {
+        const panel = document.createElement('div');
+        panel.id = 'dy-extractor-panel';
+        document.body.appendChild(panel);
+        return panel;
+    }
+
+    // --- 面板显示/隐藏 ---
+    function showPanel() {
+        let panel = document.getElementById('dy-extractor-panel');
+        let overlay = document.getElementById('dy-extractor-overlay');
+
+        if (!panel) panel = createPanel();
+        if (!overlay) overlay = createOverlay();
+
+        updatePanelContent();
+
+        setTimeout(() => {
+            panel.classList.add('show');
+            overlay.classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }, 10);
+    }
+
+    function hidePanel() {
+        const panel = document.getElementById('dy-extractor-panel');
+        const overlay = document.getElementById('dy-extractor-overlay');
+
+        if (panel) panel.classList.remove('show');
+        if (overlay) overlay.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+
+    // --- 一键复制所有信息 ---
+    function copyAllInfo() {
+        let exportText = '';
+
+        if (userData.isOwnPage) {
+            // 自己页面的一键复制
+            exportText = `=== 我的抖音信息 ===\n`;
+            exportText += `SecUserID: ${userData.secUid || '未获取'}\n`;
+
+            if (userData.cookies) {
+                exportText += `\n=== Cookie信息 ===\n`;
+                exportText += `${userData.cookies}\n`;
+            }
+
+            exportText += `\n提取时间: ${new Date().toLocaleString()}`;
+        } else {
+            // 他人页面的一键复制
+            exportText = `=== 博主信息 ===\n`;
+            exportText += `博主名字: ${userData.nickname || '未获取'}\n`;
+            exportText += `博主SecUID: ${userData.secUid || '未获取'}\n`;
+            exportText += `博主UID (author_user_id): ${userData.uid || '未获取'}\n`;
+
+            exportText += `\n提取时间: ${new Date().toLocaleString()}`;
+        }
+
+        // 复制到剪贴板
+        GM_setClipboard(exportText, 'text');
+
+        // 显示通知
+        if (typeof GM_notification !== 'undefined') {
+            GM_notification({
+                text: '所有信息已复制到剪贴板',
+                title: '抖音信息提取器',
+                timeout: 2000
+            });
+        }
+
+        // 按钮反馈效果
+        const copyAllBtn = document.querySelector('.dy-copy-all-btn');
+        if (copyAllBtn) {
+            const originalText = copyAllBtn.innerHTML;
+            copyAllBtn.innerHTML = '✅ 复制成功！';
+            copyAllBtn.classList.add('copied');
+
+            setTimeout(() => {
+                copyAllBtn.innerHTML = originalText;
+                copyAllBtn.classList.remove('copied');
+            }, 2000);
+        }
+
+        console.log('[提取器] 已复制所有信息到剪贴板');
+    }
+
+    // --- 更新面板内容 (严格分离的界面) ---
+    function updatePanelContent() {
+        detectPageType();
+        applyTheme();
+
+        const panel = document.getElementById('dy-extractor-panel');
+        if (!panel) return;
+
+        const pageType = userData.isOwnPage ? '自己页面' : '他人页面';
+        const title = userData.isOwnPage ? '我的抖音信息' : '博主信息提取';
+        const emoji = userData.isOwnPage ? '👤' : '👥';
+
+        // 更新悬浮按钮图标
+        const btn = document.getElementById('dy-extractor-trigger');
+        if (btn) {
+            btn.innerHTML = userData.isOwnPage ? '👤' : '📊';
+            btn.title = userData.isOwnPage ? '我的信息' : '博主信息';
+        }
+
+        // 根据页面类型生成不同的内容
+        let contentHtml = '';
+
+        if (userData.isOwnPage) {
+            // 自己页面内容
+            userData.cookies = document.cookie;
+            const hasCookies = userData.cookies && userData.cookies.length > 0;
+            const hasSecUid = userData.secUid && userData.secUid.length > 10;
+
+            contentHtml = `
+                <div class="dy-info-card">
+                    <div class="dy-info-label">
+                        <span class="dy-info-label-icon">👤</span>
+                        <span>我的 SecUserID</span>
+                        ${hasSecUid ? '<span style="color:var(--accent-color);font-size:11px;">✓ 已获取</span>' : ''}
+                    </div>
+                    <div class="dy-info-value-wrapper">
+                        <div class="dy-info-value">
+                            ${userData.secUid || '自动获取中...'}
+                        </div>
+                        <button class="dy-copy-btn" data-text="${userData.secUid || ''}">
+                            <span>📋 复制</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="dy-info-card">
+                    <div class="dy-info-label">
+                        <span class="dy-info-label-icon">🍪</span>
+                        <span>Cookie 信息</span>
+                    </div>
+                    <div class="dy-info-value-wrapper">
+                        <div class="dy-info-value" style="font-size: 12px; max-height: 180px;">
+                            ${hasCookies ? userData.cookies.replace(/;/g, ';\n') : '未检测到Cookie'}
+                        </div>
+                        ${hasCookies ? `
+                            <button class="dy-copy-btn" data-text="${userData.cookies}">
+                                <span>📋 复制</span>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- 提示信息：当SecUserID未获取到时显示 -->
+                <div class="dy-help-tip">
+                    <strong>🤖 自动获取状态</strong><br>
+                    脚本已尝试自动获取您的SecUserID。
+                    <span style="color:var(--accent-color);">
+                        ${userData.secUid ? '✅ 获取成功！' : '🔄 正在尝试...'}
+                    </span>
+                    <br><br>
+                    <strong>📝 手动获取指引（如自动获取失败）：</strong>
+                    <ol>
+                        <li>点击页面上的 <strong>"关注"</strong> 或 <strong>"关注列表"</strong> 按钮。</li>
+                        <li>等待列表加载（约1-2秒）。</li>
+                        <li>关闭列表，返回此面板查看结果。</li>
+                    </ol>
+                    此操作是安全的，仅用于触发抖音页面加载您的身份信息。
+                </div>
+
+                <button class="dy-copy-all-btn">
+                    📋 一键复制我的所有信息
+                </button>
+            `;
+        } else {
+            // 他人页面内容 - 顺序调整：博主名字 -> 博主UID -> 博主SecUID
+            const hasData = userData.nickname || userData.uid || userData.secUid;
+
+            if (!hasData) {
+                contentHtml = `
+                    <div class="dy-empty-state">
+                        <div class="dy-empty-state-icon">🔍</div>
+                        <div class="dy-empty-state-text">
+                            <p>正在等待博主信息...</p>
+                            <p style="font-size:13px;margin-top:15px;color:var(--text-secondary-color);">
+                                请向下滚动博主作品列表以触发数据提取
+                            </p>
+                        </div>
+                    </div>
+
+                    <button class="dy-copy-all-btn">
+                        📋 一键复制所有信息
+                    </button>
+                `;
+            } else {
+                contentHtml = `
+                    <div class="dy-info-card">
+                        <div class="dy-info-label">
+                            <span class="dy-info-label-icon">👤</span>
+                            <span>博主名字</span>
+                        </div>
+                        <div class="dy-info-value-wrapper">
+                            <div class="dy-info-value">${userData.nickname || '未获取'}</div>
+                            <button class="dy-copy-btn" data-text="${userData.nickname || ''}">
+                                <span>📋 复制</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="dy-info-card">
+                        <div class="dy-info-label">
+                            <span class="dy-info-label-icon">🔢</span>
+                            <span>博主 UID (author_user_id)</span>
+                        </div>
+                        <div class="dy-info-value-wrapper">
+                            <div class="dy-info-value">${userData.uid || '未获取'}</div>
+                            <button class="dy-copy-btn" data-text="${userData.uid || ''}">
+                                <span>📋 复制</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="dy-info-card">
+                        <div class="dy-info-label">
+                            <span class="dy-info-label-icon">🆔</span>
+                            <span>博主 SecUID</span>
+                        </div>
+                        <div class="dy-info-value-wrapper">
+                            <div class="dy-info-value">${userData.secUid || '未获取'}</div>
+                            <button class="dy-copy-btn" data-text="${userData.secUid || ''}">
+                                <span>📋 复制</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button class="dy-copy-all-btn">
+                        📋 一键复制博主所有信息
+                    </button>
+                `;
+            }
+        }
+
+        panel.innerHTML = `
+            <div class="dy-extractor-header">
+                <button class="dy-extractor-close" title="关闭">×</button>
+                <h2 class="dy-extractor-title">
+                    <span>${emoji} ${title}</span>
+                    <span class="dy-page-type-badge">${pageType}</span>
+                </h2>
+                <p class="dy-extractor-subtitle">最后更新: ${userData.lastUpdated || '等待数据...'}</p>
+            </div>
+            <div class="dy-extractor-content">
+                ${contentHtml}
+            </div>
+            <div class="dy-status-bar">
+                <span>抖音信息提取器 v10.1</span>
+                <span>增强自动获取版</span>
+            </div>
+        `;
+
+        // 绑定事件
+        panel.querySelector('.dy-extractor-close').addEventListener('click', hidePanel);
+        panel.querySelector('.dy-copy-all-btn').addEventListener('click', copyAllInfo);
+
+        // 绑定单个复制按钮
+        panel.querySelectorAll('.dy-copy-btn').forEach(btn => {
+            btn.addEventListener('click', handleCopy);
+        });
+    }
+
+    // --- 单个复制功能 ---
+    async function handleCopy(event) {
+        const button = event.currentTarget;
+        const text = button.getAttribute('data-text');
+
+        if (!text) {
+            button.innerHTML = '<span>❌ 无内容</span>';
+            setTimeout(() => button.innerHTML = '<span>📋 复制</span>', 2000);
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            GM_setClipboard(text, 'text');
+
+            button.innerHTML = '<span>✅ 已复制</span>';
+            button.classList.add('copied');
+
+            setTimeout(() => {
+                button.innerHTML = '<span>📋 复制</span>';
+                button.classList.remove('copied');
+            }, 2000);
+
+        } catch (err) {
+            button.innerHTML = '<span>❌ 失败</span>';
+            setTimeout(() => button.innerHTML = '<span>📋 复制</span>', 2000);
+        }
+    }
+
+    // --- 初始化 ---
+    function init() {
+        console.log('[抖音信息提取器 v10.1] 启动 - 增强自动获取版');
+
+        // 先检测页面类型
+        detectPageType();
+
+        // 应用主题
+        applyTheme();
+
+        // 设置网络监听
+        setupNetworkListener();
+
+        // 创建界面元素
+        createTriggerButton();
+        createOverlay();
+
+        // 如果是自己页面，使用增强版自动获取
+        if (userData.isOwnPage) {
+            console.log('[提取器] 检测到自己页面，启动增强版自动获取...');
+            // 给予页面一点加载时间
+            setTimeout(() => {
+                enhancedAutoTrigger();
+            }, 2500);
+        }
+
+        // 初始提取基础信息
+        setTimeout(() => {
+            // 提取昵称（如果是他人页面）
+            const titleEl = document.querySelector('[data-e2e="user-title"]');
+            if (titleEl && !userData.isOwnPage) {
+                userData.nickname = cleanNickname(titleEl.textContent.trim());
+            }
+
+            // 获取Cookie（如果是自己页面）
+            if (userData.isOwnPage) {
+                userData.cookies = document.cookie;
+            }
+
+            userData.lastUpdated = new Date().toLocaleTimeString();
+            updateDisplay();
+        }, 1000);
+    }
+
+    // --- 更新显示 ---
+    function updateDisplay() {
+        updatePanelContent();
+    }
+
+    // --- 启动脚本 ---
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
+// =========================
+//  MIT License 放置区（规范位置：脚本末尾）
+// =========================
+
+/*
+MIT License
+
+Copyright (c) 2025 kevencs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
