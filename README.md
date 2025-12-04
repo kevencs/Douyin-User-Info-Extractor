@@ -1,10 +1,11 @@
 
-<img width="460" height="590" alt="20251204132204" src="https://github.com/user-attachments/assets/40cf9691-e14b-4ffc-bb59-a1e94e17f0ae" />
+<img width="439" height="561" alt="20251204132204" src="https://github.com/user-attachments/assets/504f23e0-7609-4ded-9b1c-378184bbb330" />
+
 <img width="434" height="562" alt="20251204132309" src="https://github.com/user-attachments/assets/f02cb6f5-c8b5-4b3c-895c-6a67fa2cdf3c" />   <img width="441" height="579" alt="20251204132336" src="https://github.com/user-attachments/assets/4cfd8f36-412f-41b6-9605-d8316b7c156a" />
 
 
 
-智能识别抖音主页类型，自动获取并展示博主昵称、SecUID、UID、SecUserID 以及 Cookie 信息，并支持一键复制功能。
+抖音信息提取器：智能识别抖音主页类型，自动获取并展示博主昵称、SecUID、UID、SecUserID 以及 Cookie 信息，并支持一键复制功能。
 
 使用说明：
 本脚本需搭配浏览器扩展程序「篡改猴 (Tampermonkey)」使用：https://www.tampermonkey.net/
