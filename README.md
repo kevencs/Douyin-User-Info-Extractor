@@ -2,6 +2,9 @@
 
 使用说明：
 本脚本需搭配浏览器扩展程序「篡改猴 (Tampermonkey)」使用：https://www.tampermonkey.net/
+程序的界面入口在网页的右下角
+<img width="310" height="204" alt="20251206141343" src="https://github.com/user-attachments/assets/3c0dd101-aa0f-40d4-a596-6d7b8ded461c" />
+
 
 请先安装 Tampermonkey 后再导入脚本，否则将无法正常运行。
 
