@@ -1,4 +1,4 @@
-抖音信息提取器：智能识别抖音主页类型，自动获取并展示博主昵称、SecUID、UID、SecUserID 以及 Cookie 信息，并支持一键复制功能。
+抖音信息提取器：智能识别抖音主页类型，自动获取并展示博主昵称、SecUID、UID、SecUserID，并支持一键复制功能。具有局限性Cookie信息需要手动去获取
 
 使用说明：
 本脚本需搭配浏览器扩展程序「篡改猴 (Tampermonkey)」使用：https://www.tampermonkey.net/
