@@ -67,12 +67,13 @@
 ### 自己主页信息面板
 访问自己主页时，显示SecUserID和详细的Cookie获取指引。
 
-![自己主页信息面板](https://github.com/user-attachments/assets/2e36c60c-4c96-4d59-94ca-cd2608c73e89)
+![自己主页信息面板](https://github.com/user-attachments/assets/6c788bab-0d2f-4752-9758-7876915678d4)
 
 ### Cookie获取指引界面
 详细的操作步骤指引，帮助用户获取完整Cookie。
 
-![Cookie获取指引](https://github.com/user-attachments/assets/4e5e7c29-9d62-49be-812a-bde92db40cf6)
+![Cookie获取指引](https://github.com/user-attachments/assets/6334165c-b5cf-4818-8fd9-49852f2d1d5c)
+
 
 ## 致谢声明
 
