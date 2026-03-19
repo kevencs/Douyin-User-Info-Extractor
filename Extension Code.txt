@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         抖音信息提取器（自动获取优化版 v10.2）
+// @name         抖音信息提取器（自动获取优化版 v10.3）
 // @namespace    https://github.com/kevencs/Douyin-User-Info-Extractor
-// @version      10.2
-// @description  智能识别抖音主页类型，自动提取并展示博主名字、SecUID、UID、SecUserID信息，提供一键复制功能
+// @version      10.2-fixed
+// @description  智能识别抖音主页类型，自动提取并展示博主名字、SecUID、UID、SecUserID信息，提供一键复制功能（修复SecUserID获取，增加手动点击提示）
 // @author       kevencs
 // @license      MIT
 // @homepageURL  https://github.com/kevencs
@@ -17,6 +17,8 @@
 
 /*
 本插件有部分灵感与功能来源于抖小云作者的优秀程序，在此表示诚挚感谢。
+修复：SecUserID 提取路径更正为 data.user.sec_uid，避免误取他人 ID。
+增加：未获取 SecUserID 时，显式提示需要点击「关注列表」按钮。
 */
 
 (function() {
@@ -672,11 +674,11 @@
                 };
             }
 
-            // 2. 监听关注列表请求 - 获取自己的sec_user_id（强化响应解析）
+            // 2. 监听关注列表请求 - 获取自己的sec_user_id（修复：从 data.user.sec_uid 提取）
             if (requestUrl.includes('/web/user/following/list') || requestUrl.includes('/aweme/v1/web/user/following/list')) {
                 console.log('[提取器] 检测到关注列表请求:', requestUrl);
 
-                // 从URL提取sec_user_id
+                // 从URL提取sec_user_id（优先）
                 try {
                     const urlObj = new URL(requestUrl, window.location.origin);
                     const secUidFromUrl = urlObj.searchParams.get('sec_user_id');
@@ -687,20 +689,21 @@
                     }
                 } catch (e) { console.warn('[提取器] URL解析失败:', e); }
 
-                // 新增关键逻辑：监听响应，从JSON数据中提取
+                // 从响应中提取（确保正确路径）
                 const originalOnReadyStateChange = this.onreadystatechange;
                 this.onreadystatechange = function() {
                     if (this.readyState === 4 && this.status === 200) {
                         try {
                             const response = JSON.parse(this.responseText);
-                            // 尝试从响应数据的常见路径中查找 sec_user_id
                             let extractedSecUid = '';
+
+                            // ✅ 正确路径：从 data.user.sec_uid 获取当前登录用户的 SecUserID
                             if (response?.data?.user?.sec_uid) {
                                 extractedSecUid = response.data.user.sec_uid;
-                            } else if (response?.followings && response.followings[0]?.sec_uid) {
-                                extractedSecUid = response.followings[0].sec_uid;
-                            } else if (response?.sec_user_id) {
-                                extractedSecUid = response.sec_user_id;
+                            }
+                            // 备用路径：某些接口可能直接返回 user 对象
+                            else if (response?.user?.sec_uid) {
+                                extractedSecUid = response.user.sec_uid;
                             }
 
                             if (extractedSecUid && extractedSecUid.length > 10) {
@@ -708,8 +711,7 @@
                                 userData.isOwnPage = true;
                                 userData.lastUpdated = new Date().toLocaleTimeString() + ' (自动获取)';
                                 console.log('[提取器] 从响应JSON提取到SecUserID:', userData.secUid);
-                                updateDisplay(); // 立即更新面板显示
-                                // 发送成功通知
+                                updateDisplay();
                                 if (typeof GM_notification !== 'undefined') {
                                     GM_notification({
                                         text: `SecUserID 获取成功！`,
@@ -864,21 +866,21 @@
         console.log('[提取器] 已复制所有信息到剪贴板');
     }
 
-    // --- 生成Cookie获取指引 ---
+    // --- 生成Cookie获取指引（改进版）---
     function generateCookieGuide() {
         return `
             <div class="dy-guide-card">
                 <div class="dy-guide-header">
-                    <span class="dy-guide-icon">🔍</span>
-                    <span>如何获取完整Cookie（用于其他工具）</span>
+                    <span class="dy-guide-icon">🍪</span>
+                    <span>手动获取完整Cookie（用于其他工具）</span>
                 </div>
 
                 <div class="dy-guide-step">
                     <div class="dy-guide-step-number">1</div>
                     <div class="dy-guide-step-content">
-                        <div class="dy-guide-step-title">进入「我的收藏」页面</div>
+                        <div class="dy-guide-step-title">登录并进入个人主页</div>
                         <div class="dy-guide-step-desc">
-                            点击抖音APP左侧菜单的「我的收藏」，确保页面完全加载完成
+                            打开抖音网页版 (<strong>https://www.douyin.com/</strong>) 并登录您的账号，然后进入您的个人主页。
                         </div>
                     </div>
                 </div>
@@ -888,7 +890,7 @@
                     <div class="dy-guide-step-content">
                         <div class="dy-guide-step-title">打开开发者工具</div>
                         <div class="dy-guide-step-desc">
-                            按 <strong>F12</strong> 键（或右键 → 检查）打开浏览器「开发者工具」
+                            按下 <strong>F12</strong> 键（或右键 → 检查）打开开发者工具，切换到「Network（网络）」标签。
                         </div>
                         <div class="dy-guide-code">快捷键: F12</div>
                     </div>
@@ -897,9 +899,9 @@
                 <div class="dy-guide-step">
                     <div class="dy-guide-step-number">3</div>
                     <div class="dy-guide-step-content">
-                        <div class="dy-guide-step-title">切换到「Network」标签</div>
+                        <div class="dy-guide-step-title">筛选关注列表请求</div>
                         <div class="dy-guide-step-desc">
-                            在开发者工具顶部点击「Network（网络）」标签页
+                            在Network筛选框中输入 <strong>/follow</strong>（或 <strong>list?</strong>），以便快速定位。
                         </div>
                     </div>
                 </div>
@@ -907,35 +909,54 @@
                 <div class="dy-guide-step">
                     <div class="dy-guide-step-number">4</div>
                     <div class="dy-guide-step-content">
-                        <div class="dy-guide-step-title">筛选请求</div>
+                        <div class="dy-guide-step-title">触发关注列表加载</div>
                         <div class="dy-guide-step-desc">
-                            在筛选框中输入以下关键词，然后按回车：
+                            点击您头像旁边的「关注」按钮，弹出关注列表。此时Network中会出现相关请求。
                         </div>
-                        <div class="dy-guide-code">v1/web/aweme/listcollection</div>
                     </div>
                 </div>
 
                 <div class="dy-guide-step">
                     <div class="dy-guide-step-number">5</div>
                     <div class="dy-guide-step-content">
-                        <div class="dy-guide-step-title">复制Cookie字段</div>
+                        <div class="dy-guide-step-title">找到目标请求</div>
                         <div class="dy-guide-step-desc">
-                            点击任意一条筛选结果 → 在右侧「Headers（标头）」中 → 找到「Cookie」字段 →
-                            <strong>完整复制整段内容（不可删减字符）</strong>
+                            在请求列表中找到名称包含 <strong>list/?device_platform=webapp</strong> 的请求（通常为 <code>following/list</code>），点击它。
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dy-guide-step">
+                    <div class="dy-guide-step-number">6</div>
+                    <div class="dy-guide-step-content">
+                        <div class="dy-guide-step-title">复制完整Cookie</div>
+                        <div class="dy-guide-step-desc">
+                            在右侧「Headers（标头）」中，向下滚动找到 <strong>Cookie</strong> 字段，<strong>完整复制整个值</strong>（注意不要带换行符，确保完整复制所有内容）。
                         </div>
                         <div class="dy-guide-code" style="font-size: 11px; padding: 8px 12px;">
-                            右键点击Cookie字段值 → 选择「复制」<br>
-                            或手动全选复制（确保完整复制，包括所有分号）
+                            右键点击Cookie值 → 选择「复制值」<br>
+                            或手动全选复制（确保前后无多余换行）
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dy-guide-step">
+                    <div class="dy-guide-step-number">7</div>
+                    <div class="dy-guide-step-content">
+                        <div class="dy-guide-step-title">（可选）查看SecUserID</div>
+                        <div class="dy-guide-step-desc">
+                            在该请求的URL中，您可以看到 <strong>sec_user_id</strong> 参数，其值即为您的SecUserID（脚本已自动获取，无需手动复制）。
                         </div>
                     </div>
                 </div>
 
                 <div class="dy-guide-note">
                     <strong>⚠️ 重要提示：</strong><br>
-                    1. Cookie包含您的登录凭证，请勿分享给他人<br>
-                    2. 获取后请妥善保管，避免泄露<br>
-                    3. 此方法获取的是完整Cookie，比脚本自动获取的更可靠<br>
-                    4. 每次登录后Cookie会变化，需要重新获取
+                    1. Cookie 包含您的登录凭证，请勿分享给他人。<br>
+                    2. 获取后请妥善保管，避免泄露。<br>
+                    3. 此方法获取的是完整Cookie，比脚本自动获取的更可靠。<br>
+                    4. 每次登录后Cookie会变化，需要重新获取。<br>
+                    5. 复制时请确保没有多余空格或换行，否则可能导致工具验证失败。
                 </div>
             </div>
         `;
@@ -1001,8 +1022,9 @@
                                 }
                             </div>
                             ${!hasSecUid ? `
-                                <div class="dy-guide-code" style="margin-top: 10px;">
-                                    1. 点击页面上的 <strong>"关注"</strong> 或 <strong>"关注列表"</strong> 按钮<br>
+                                <div class="dy-guide-code" style="margin-top: 10px; background: #ffecb3; color: #856404; border-left: 4px solid #ffc107; font-weight: normal;">
+                                    <span style="font-size:16px; margin-right:6px;">⚠️</span> 需要手动点击关注列表才能获取SecUserID：<br>
+                                    1. 点击页面上方的 <strong>「关注列表」</strong> 按钮（或「关注」按钮）<br>
                                     2. 等待列表加载（约1-2秒）<br>
                                     3. 返回此面板查看结果
                                 </div>
@@ -1099,7 +1121,7 @@
             </div>
             <div class="dy-status-bar">
                 <div class="dy-status-bar-left">
-                    <span>抖音信息提取器 v10.2</span>
+                    <span>抖音信息提取器 v10.3</span>
                 </div>
                 <div class="dy-status-bar-right">
                     <a href="https://github.com/kevencs/Douyin-User-Info-Extractor"
@@ -1154,7 +1176,7 @@
 
     // --- 初始化 ---
     function init() {
-        console.log('[抖音信息提取器 v10.2] 启动 - 增强自动获取版（无Cookie自动获取）');
+        console.log('[抖音信息提取器 v10.3] 启动 - 修复SecUserID获取路径');
 
         // 先检测页面类型
         detectPageType();
