@@ -867,6 +867,7 @@
     }
 
     // --- 生成Cookie获取指引（改进版）---
+    // ✅ 修改点：步骤顺序调整为 触发请求 → 筛选 → 找到；关键词使用带框样式
     function generateCookieGuide() {
         return `
             <div class="dy-guide-card">
@@ -899,9 +900,9 @@
                 <div class="dy-guide-step">
                     <div class="dy-guide-step-number">3</div>
                     <div class="dy-guide-step-content">
-                        <div class="dy-guide-step-title">筛选关注列表请求</div>
+                        <div class="dy-guide-step-title">触发收藏夹请求</div>
                         <div class="dy-guide-step-desc">
-                            在Network筛选框中输入 <strong>/follow</strong>（或 <strong>list?</strong>），以便快速定位。
+                            点击您头像旁边的「收藏」按钮（或进入收藏夹页面），此时 Network 面板中会产生网络请求。
                         </div>
                     </div>
                 </div>
@@ -909,9 +910,11 @@
                 <div class="dy-guide-step">
                     <div class="dy-guide-step-number">4</div>
                     <div class="dy-guide-step-content">
-                        <div class="dy-guide-step-title">触发关注列表加载</div>
+                        <div class="dy-guide-step-title">筛选收藏夹请求</div>
                         <div class="dy-guide-step-desc">
-                            点击您头像旁边的「关注」按钮，弹出关注列表。此时Network中会出现相关请求。
+                            在 Network 筛选框中输入 
+                            <code class="dy-guide-code" style="display: inline-block; padding: 2px 8px; margin: 0 2px; font-size: 12px;">v1/web/aweme/favorite</code>
+                            ，以便快速定位收藏夹接口。
                         </div>
                     </div>
                 </div>
@@ -921,7 +924,7 @@
                     <div class="dy-guide-step-content">
                         <div class="dy-guide-step-title">找到目标请求</div>
                         <div class="dy-guide-step-desc">
-                            在请求列表中找到名称包含 <strong>list/?device_platform=webapp</strong> 的请求（通常为 <code>following/list</code>），点击它。
+                            在请求列表中找到名称包含 <strong>favorite</strong> 的请求（通常为 <code>v1/web/aweme/favorite</code>），点击它。
                         </div>
                     </div>
                 </div>
@@ -945,7 +948,7 @@
                     <div class="dy-guide-step-content">
                         <div class="dy-guide-step-title">（可选）查看SecUserID</div>
                         <div class="dy-guide-step-desc">
-                            在该请求的URL中，您可以看到 <strong>sec_user_id</strong> 参数，其值即为您的SecUserID（脚本已自动获取，无需手动复制）。
+                            在该请求的URL参数中，您可以看到 <strong>sec_user_id</strong> 的值（脚本已自动获取，无需手动复制）。
                         </div>
                     </div>
                 </div>
